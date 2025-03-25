@@ -284,7 +284,7 @@ class VarianceExploding(DynamicMixture):
         return 0.0
 
     def f_with_div(self, t, x):
-        return 0.0
+        return 0.0, 0.0
 
     def g(self, t):
         return np.sqrt(2.0 * t)

@@ -8,7 +8,7 @@ DEFAULT_SEED = 42
 
 class Covariance:
     """
-    Attributes: cov, inv_cov, std, inv_std, sqrt_det, trace_cov
+    Attributes: cov, inv_cov, std, inv_std, sqrt_det, trace_inv_cov
     """
 
     @abstractmethod
@@ -24,6 +24,9 @@ class Covariance:
     def reduce_sq(self, x):  # for the score
         return self._apply(x, self.inv_cov)
 
+    def reduce_grad_and_divgrad(self, x):  # for the score and its divergence
+        return self._apply(x, self.inv_cov), self.trace_inv_cov
+
 
 class CovarianceMat(Covariance):
     def __init__(self, cov: np.ndarray):
@@ -34,7 +37,7 @@ class CovarianceMat(Covariance):
         self.inv_std = (U / sqrt_S) @ Uh
         self.inv_cov = (U / S) @ Uh
         self.sqrt_det = sqrt_S.prod()
-        self.trace_cov = S.sum()
+        self.trace_inv_cov = np.linalg.trace(self.inv_cov)
 
     def _apply(self, y, mat):
         return y @ mat.T
@@ -47,7 +50,7 @@ class CovarianceVec(Covariance):
         self.inv_std = 1.0 / self.std
         self.inv_cov = 1.0 / cov
         self.sqrt_det = self.std.prod()
-        self.trace_cov = self.cov.sum()
+        self.trace_inv_cov = self.inv_cov.sum()
 
     def _apply(self, y, mat):
         return y * mat
@@ -94,7 +97,8 @@ class MultivariateNormal:
         return -self.cov.reduce_sq(x - self.mean)
 
     def score_with_div(self, x):
-        return -self.cov.reduce_sq(x - self.mean)
+        score, div_score = self.cov.reduce_grad_and_divgrad(x - self.mean)
+        return -score, -div_score
 
     def sample(self, size: tuple | int = (), seed: SeedSequence | int = DEFAULT_SEED):
         if isinstance(size, int):
@@ -103,54 +107,54 @@ class MultivariateNormal:
         return self.cov.expand(y_sample) + self.mean
 
 
-class MultivariateNormal:
-    SQRT_2PI = np.sqrt(2.0 * np.pi)
+# class MultivariateNormal:
+#     SQRT_2PI = np.sqrt(2.0 * np.pi)
 
-    def __init__(
-        self, dim: int, mean: np.ndarray | float = 0.0, cov: np.ndarray | float = 1.0
-    ):
-        assert isinstance(dim, int), "`dim` must be integer."
-        self.dim = dim
+#     def __init__(
+#         self, dim: int, mean: np.ndarray | float = 0.0, cov: np.ndarray | float = 1.0
+#     ):
+#         assert isinstance(dim, int), "`dim` must be integer."
+#         self.dim = dim
 
-        self.mean = np.array(mean)
-        assert self.mean.ndim < 2, "`mean` must be at most 1-dimensional."
-        if self.mean.ndim == 1:
-            assert (
-                len(self.mean) == dim
-            ), "`mean` must be either scalar or of size `dim`."
+#         self.mean = np.array(mean)
+#         assert self.mean.ndim < 2, "`mean` must be at most 1-dimensional."
+#         if self.mean.ndim == 1:
+#             assert (
+#                 len(self.mean) == dim
+#             ), "`mean` must be either scalar or of size `dim`."
 
-        cov = np.array(cov)
-        assert cov.ndim < 3, "`cov` must be at most 2-dimensional."
-        if cov.ndim == 1:
-            assert len(cov) == dim, "If `cov` is a vector, it must be of size `dim`."
+#         cov = np.array(cov)
+#         assert cov.ndim < 3, "`cov` must be at most 2-dimensional."
+#         if cov.ndim == 1:
+#             assert len(cov) == dim, "If `cov` is a vector, it must be of size `dim`."
 
-        if cov.ndim == 2:
-            assert cov.shape == (
-                dim,
-                dim,
-            ), "If `cov` is 2-dimensional, it must be of shape `(dim, dim)`."
-            self.cov = CovarianceMat(cov)
-        else:
-            self.cov = CovarianceVec(cov)
+#         if cov.ndim == 2:
+#             assert cov.shape == (
+#                 dim,
+#                 dim,
+#             ), "If `cov` is 2-dimensional, it must be of shape `(dim, dim)`."
+#             self.cov = CovarianceMat(cov)
+#         else:
+#             self.cov = CovarianceVec(cov)
 
-        self.norm_cst = 1.0 / (pow(self.SQRT_2PI, self.dim) * self.cov.sqrt_det)
+#         self.norm_cst = 1.0 / (pow(self.SQRT_2PI, self.dim) * self.cov.sqrt_det)
 
-    def density(self, x):
-        y = self.cov.reduce(x - self.mean)
-        y_sq = np.sum(np.square(y), axis=-1)
-        return np.exp(-0.5 * y_sq) * self.norm_cst
+#     def density(self, x):
+#         y = self.cov.reduce(x - self.mean)
+#         y_sq = np.sum(np.square(y), axis=-1)
+#         return np.exp(-0.5 * y_sq) * self.norm_cst
 
-    def score(self, x):
-        return -self.cov.reduce_sq(x - self.mean)
+#     def score(self, x):
+#         return -self.cov.reduce_sq(x - self.mean)
 
-    def score_with_div(self, x):
-        return -self.cov.reduce_sq(x - self.mean)
+#     def score_with_div(self, x):
+#         return -self.cov.reduce_sq(x - self.mean)
 
-    def sample(self, size: tuple | int = (), seed: SeedSequence | int = DEFAULT_SEED):
-        if isinstance(size, int):
-            size = (size,)
-        y_sample = default_rng(seed).normal(size=(*size, self.dim))
-        return self.cov.expand(y_sample) + self.mean
+#     def sample(self, size: tuple | int = (), seed: SeedSequence | int = DEFAULT_SEED):
+#         if isinstance(size, int):
+#             size = (size,)
+#         y_sample = default_rng(seed).normal(size=(*size, self.dim))
+#         return self.cov.expand(y_sample) + self.mean
 
 
 class Mixture:
@@ -159,7 +163,9 @@ class Mixture:
         self.num_rv = len(rand_vars)
         assert self.num_rv > 0, "At least one density necessary"
         self.dim = rand_vars[0].dim
-        assert all(f.dim == self.dim for f in self.rv), "All random variables must have the same dimension"
+        assert all(
+            f.dim == self.dim for f in self.rv
+        ), "All random variables must have the same dimension"
 
         if weights == ():
             weights = np.ones(self.num_rv)
@@ -182,23 +188,30 @@ class Mixture:
         return tot_score / tot_prob
 
     def score_with_div(self, x, **kwargs):
-        tot_score = np.zeros_like(x)
         tot_prob = np.zeros((*x.shape[:-1], 1))
+
+        tot_score = np.zeros_like(x)
         tot_norm_sq_score = np.zeros_like(tot_prob)
         tot_div_score = np.zeros_like(tot_prob)
+        
         for w_k, rv_k in zip(self.weights, self.rv):
-            prob_k = w_k * rv_k.density(x, **kwargs)
-            score_k, div_score_k = rv_k.score_with_div(x, **kwargs)
+            prob_k = w_k * rv_k.density(x, **kwargs)[..., None]
             tot_prob += prob_k
+
+            score_k, div_score_k = rv_k.score_with_div(x, **kwargs)
             tot_score += prob_k * score_k
+
             tot_norm_sq_score += prob_k * np.sum(np.square(score_k), -1, keepdims=True)
             tot_div_score += prob_k * div_score_k
-        score = tot_score / tot_prob
-        norm_sq_tot_score = np.sum(np.square(score), axis=1, keepdims=True)
-        div_score = (tot_norm_sq_score - tot_div_score) / tot_prob - norm_sq_tot_score
+
+        score = tot_score / (1e-8 + tot_prob)
+        norm_sq_tot_score = np.sum(np.square(score), axis=-1, keepdims=True)
+        div_score = (tot_norm_sq_score + tot_div_score) / (1e-8 + tot_prob) - norm_sq_tot_score
         return score, div_score
 
-    def sample(self, size: tuple | int = (), seed: SeedSequence | int = DEFAULT_SEED, **kwargs):
+    def sample(
+        self, size: tuple | int = (), seed: SeedSequence | int = DEFAULT_SEED, **kwargs
+    ):
         if isinstance(size, int):
             size = (size,)
         if isinstance(seed, int):
