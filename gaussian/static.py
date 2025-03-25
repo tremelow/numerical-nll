@@ -27,6 +27,9 @@ class Covariance:
     def reduce_grad_and_divgrad(self, x):  # for the score and its divergence
         return self._apply(x, self.inv_cov), self.trace_inv_cov
 
+    def reduce_grad_and_jac(self, x):  # for the score and its divergence
+        return self._apply(x, self.inv_cov), self.inv_cov
+
 
 class CovarianceMat(Covariance):
     def __init__(self, cov: np.ndarray):
@@ -100,61 +103,15 @@ class MultivariateNormal:
         score, div_score = self.cov.reduce_grad_and_divgrad(x - self.mean)
         return -score, -div_score
 
+    def score_with_jac(self, x):
+        score, jac_score = self.cov.reduce_grad_and_jac(x - self.mean)
+        return -score, -jac_score
+
     def sample(self, size: tuple | int = (), seed: SeedSequence | int = DEFAULT_SEED):
         if isinstance(size, int):
             size = (size,)
         y_sample = default_rng(seed).normal(size=(*size, self.dim))
         return self.cov.expand(y_sample) + self.mean
-
-
-# class MultivariateNormal:
-#     SQRT_2PI = np.sqrt(2.0 * np.pi)
-
-#     def __init__(
-#         self, dim: int, mean: np.ndarray | float = 0.0, cov: np.ndarray | float = 1.0
-#     ):
-#         assert isinstance(dim, int), "`dim` must be integer."
-#         self.dim = dim
-
-#         self.mean = np.array(mean)
-#         assert self.mean.ndim < 2, "`mean` must be at most 1-dimensional."
-#         if self.mean.ndim == 1:
-#             assert (
-#                 len(self.mean) == dim
-#             ), "`mean` must be either scalar or of size `dim`."
-
-#         cov = np.array(cov)
-#         assert cov.ndim < 3, "`cov` must be at most 2-dimensional."
-#         if cov.ndim == 1:
-#             assert len(cov) == dim, "If `cov` is a vector, it must be of size `dim`."
-
-#         if cov.ndim == 2:
-#             assert cov.shape == (
-#                 dim,
-#                 dim,
-#             ), "If `cov` is 2-dimensional, it must be of shape `(dim, dim)`."
-#             self.cov = CovarianceMat(cov)
-#         else:
-#             self.cov = CovarianceVec(cov)
-
-#         self.norm_cst = 1.0 / (pow(self.SQRT_2PI, self.dim) * self.cov.sqrt_det)
-
-#     def density(self, x):
-#         y = self.cov.reduce(x - self.mean)
-#         y_sq = np.sum(np.square(y), axis=-1)
-#         return np.exp(-0.5 * y_sq) * self.norm_cst
-
-#     def score(self, x):
-#         return -self.cov.reduce_sq(x - self.mean)
-
-#     def score_with_div(self, x):
-#         return -self.cov.reduce_sq(x - self.mean)
-
-#     def sample(self, size: tuple | int = (), seed: SeedSequence | int = DEFAULT_SEED):
-#         if isinstance(size, int):
-#             size = (size,)
-#         y_sample = default_rng(seed).normal(size=(*size, self.dim))
-#         return self.cov.expand(y_sample) + self.mean
 
 
 class Mixture:
@@ -208,6 +165,29 @@ class Mixture:
         norm_sq_tot_score = np.sum(np.square(score), axis=-1, keepdims=True)
         div_score = (tot_norm_sq_score + tot_div_score) / (1e-8 + tot_prob) - norm_sq_tot_score
         return score, div_score
+
+    def score_with_jac(self, x, **kwargs):
+        tot_prob = np.zeros((*x.shape[:-1], 1, 1))
+
+        tot_score = np.zeros_like(x)[..., None]
+        tot_tensor_score = np.zeros((*x.shape[:-1], self.dim, self.dim))
+        tot_jac_score = np.zeros_like(tot_tensor_score)
+
+        for w_k, rv_k in zip(self.weights, self.rv):
+            prob_k = w_k * rv_k.density(x, **kwargs)[..., None, None]
+            tot_prob += prob_k
+
+            score_k, jac_score_k = rv_k.score_with_jac(x, **kwargs)
+            score_k = score_k[..., :, None]
+            tot_score += prob_k * score_k
+
+            tot_tensor_score += prob_k * score_k * np.moveaxis(score_k, -1, -2)
+            tot_jac_score += prob_k * jac_score_k
+
+        score = tot_score / (1e-8 + tot_prob)
+        tensor_tot_score = score * np.moveaxis(score, -1, -2)
+        jac_score = (tot_tensor_score + tot_jac_score) / (1e-8 + tot_prob) - tensor_tot_score
+        return score[..., 0], jac_score
 
     def sample(
         self, size: tuple | int = (), seed: SeedSequence | int = DEFAULT_SEED, **kwargs

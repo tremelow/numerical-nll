@@ -89,6 +89,13 @@ class DynamicCovarianceMat(DynamicCovariance):
         y = ((x @ self.to_sing_vec) * inv_diag_cov) @ self.from_sing_vec
         return y, np.sum(inv_diag_cov)
 
+    def reduce_grad_and_jac(self, x, scaling=1.0, added_noise_sq=0.0):
+        inv_diag_cov = 1.0 / (scaling * self.sing_vals + added_noise_sq)
+        # y = ((x @ self.to_sing_vec) * inv_diag_cov) @ self.from_sing_vec
+        inv_cov = (self.to_sing_vec * inv_diag_cov) @ self.from_sing_vec
+        y = x @ inv_cov
+        return y, inv_cov
+
 
 class DynamicCovarianceVec(DynamicCovariance):
     def __init__(self, cov: np.ndarray):
@@ -109,6 +116,10 @@ class DynamicCovarianceVec(DynamicCovariance):
     def reduce_grad_and_divgrad(self, x, scaling=1.0, added_noise_sq=0.0):
         inv_cov = scaling * self.cov + added_noise_sq
         return x * inv_cov, inv_cov.sum()
+    
+    def reduce_grad_and_jac(self, x, scaling=1.0, added_noise_sq=0.0):
+        inv_cov = scaling * self.cov + added_noise_sq
+        return x * inv_cov, inv_cov
 
 
 class DynamicCovarianceScal(DynamicCovarianceVec):
@@ -180,6 +191,13 @@ class DynamicMultivariateNormal:
             x_cent, scaling=scaling, added_noise_sq=added_noise_sq
         )
         return -y, -tr
+
+    def score_with_jac(self, x, scaling=1.0, drift=0.0, added_noise_sq=0.0):
+        x_cent = x - self.mean(scaling, drift)
+        y, jac = self.cov.reduce_grad_and_jac(
+            x_cent, scaling=scaling, added_noise_sq=added_noise_sq
+        )
+        return -y, -jac
 
     def sample(
         self,
@@ -254,6 +272,9 @@ class DynamicMixture(Mixture):
 
     def score_with_div(self, t, x):
         return Mixture.score_with_div(self, x, **self.evol_t(t))
+
+    def score_with_jac(self, t, x):
+        return Mixture.score_with_jac(self, x, **self.evol_t(t))
 
     def ode(self, t, x):
         return self.f(t, x) - 0.5 * self.g_sq(t) * self.score(t, x)
@@ -350,7 +371,7 @@ class VariancePreserving(DynamicMixture):
             "drift": drift,
             "added_noise_sq": added_noise_sq
         }
-    
+
 
 class SubVariancePreserving(DynamicMixture):
     def __init__(self, rand_vars: tuple[MultivariateNormal], weights=(), beta_min=1e-2, beta_max=20.0):
