@@ -231,6 +231,10 @@ class DynamicMixture(Mixture):
     def f_with_div(self, t, x):
         a_t, b_t = self.a(t), self.b(t)
         return a_t * x + b_t, self.dim * a_t
+    
+    def f_with_jac(self, t, x):
+        a_t, b_t = self.a(t), self.b(t)
+        return a_t * x + b_t, a_t * np.eye(self.dim)
 
     @abstractmethod
     def g(self, t):
@@ -287,6 +291,15 @@ class DynamicMixture(Mixture):
         ode = f_tx - 0.5 * g_sq_t * score_tx
         vol = div_f_tx - 0.5 * g_sq_t * div_score_tx
         return ode, vol
+
+    def ode_with_jac(self, t, x):
+        # in forward time, ODE in x concatenated with the volume variation, the time-differential of log(p)
+        f_tx, jac_f_tx = self.f_with_jac(t, x)
+        score_tx, jac_score_tx = self.score_with_jac(t, x)
+        g_sq_t = self.g_sq(t)
+        ode = f_tx - 0.5 * g_sq_t * score_tx
+        jac = jac_f_tx - 0.5 * g_sq_t * jac_score_tx
+        return ode, jac
 
 
 ###########################
