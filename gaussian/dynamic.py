@@ -56,7 +56,7 @@ class DynamicCovariance:
         pass
 
     @abstractmethod
-    def reduce_sq(self, x, scaling=1.0, added_noise_sq=0.0):
+    def reduce_grad(self, x, scaling=1.0, added_noise_sq=0.0):
         """For the score. Returns $C^{-1} x$."""
         pass
 
@@ -80,7 +80,7 @@ class DynamicCovarianceMat(DynamicCovariance):
         y_norm_sq = np.square((x @ self.to_sing_vec) / np.sqrt(diag_cov)).sum(-1)
         return y_norm_sq, diag_cov.prod()
 
-    def reduce_sq(self, x, scaling=1.0, added_noise_sq=0.0):
+    def reduce_grad(self, x, scaling=1.0, added_noise_sq=0.0):
         diag_cov = scaling * self.sing_vals + added_noise_sq
         return ((x @ self.to_sing_vec) / diag_cov) @ self.from_sing_vec
 
@@ -109,7 +109,7 @@ class DynamicCovarianceVec(DynamicCovariance):
         diag_cov = scaling * self.cov + added_noise_sq
         return np.square(x / np.sqrt(diag_cov)).sum(-1), diag_cov.prod()
 
-    def reduce_sq(self, x, scaling=1.0, added_noise_sq=0.0):
+    def reduce_grad(self, x, scaling=1.0, added_noise_sq=0.0):
         cov = scaling * self.cov + added_noise_sq
         return x / cov
 
@@ -181,7 +181,7 @@ class DynamicMultivariateNormal:
 
     def score(self, x, scaling=1.0, drift=0.0, added_noise_sq=0.0):
         x_cent = x - self.mean(scaling, drift)
-        return -self.cov.reduce_sq(
+        return -self.cov.reduce_grad(
             x_cent, scaling=scaling, added_noise_sq=added_noise_sq
         )
 

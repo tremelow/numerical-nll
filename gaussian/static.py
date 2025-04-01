@@ -21,7 +21,7 @@ class Covariance:
     def reduce(self, x):  # for the density
         return self._apply(x, self.inv_std)
 
-    def reduce_sq(self, x):  # for the score
+    def reduce_grad(self, x):  # for the score
         return self._apply(x, self.inv_cov)
 
     def reduce_grad_and_divgrad(self, x):  # for the score and its divergence
@@ -59,6 +59,19 @@ class CovarianceVec(Covariance):
         return y * mat
 
 
+class CovarianceScal(CovarianceVec):
+    def __init__(self, dim: int, cov: np.ndarray):
+        self.cov = cov
+        self.std = np.sqrt(cov)
+        self.inv_std = 1.0 / self.std
+        self.inv_cov = 1.0 / cov
+        self.sqrt_det = pow(self.std, dim)
+        self.trace_inv_cov = dim * self.inv_cov
+
+    def _apply(self, y, mat):
+        return y * mat
+
+
 class MultivariateNormal:
     SQRT_2PI = np.sqrt(2.0 * np.pi)
 
@@ -86,8 +99,10 @@ class MultivariateNormal:
                 dim,
             ), "If `cov` is 2-dimensional, it must be of shape `(dim, dim)`."
             self.cov = CovarianceMat(cov)
-        else:
+        elif cov.ndim == 1:
             self.cov = CovarianceVec(cov)
+        elif cov.ndim == 0:
+            self.cov = CovarianceScal(self.dim, cov)
 
         self.norm_cst = 1.0 / (pow(self.SQRT_2PI, self.dim) * self.cov.sqrt_det)
 
@@ -97,7 +112,7 @@ class MultivariateNormal:
         return np.exp(-0.5 * y_sq) * self.norm_cst
 
     def score(self, x):
-        return -self.cov.reduce_sq(x - self.mean)
+        return -self.cov.reduce_grad(x - self.mean)
 
     def score_with_div(self, x):
         score, div_score = self.cov.reduce_grad_and_divgrad(x - self.mean)
