@@ -1,2 +1,2 @@
 from .explicit import EulerSolver
-from .implicit import BroydenSolver
+from .implicit import BroydenSolver, BroydenSolverNLL
