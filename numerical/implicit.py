@@ -8,9 +8,9 @@ class BroydenSolver:
     Implicit Euler method solver using Broyden method
     """
 
-    def __init__(self, ode, ode_with_jac, t_min, tf, nt, linear_ts=False):
-        self.ode = ode
-        self.ode_with_jac = ode_with_jac
+    def __init__(self, mix, t_min, tf, nt, linear_ts=False):
+        self.ode = mix.ode
+        self.ode_with_jac = mix.ode_with_jac
         self.tf = tf
 
         if linear_ts:
