@@ -177,7 +177,7 @@ class DynamicMultivariateNormal:
         y_norm_sq, det_cov = self.cov.reduced_norm_sq(
             x_cent, scaling=scaling, added_noise_sq=added_noise_sq
         )
-        return np.exp(-0.5 * y_norm_sq) * self.base_norm_cst / det_cov
+        return np.exp(-0.5 * y_norm_sq) * self.base_norm_cst / np.sqrt(det_cov)
 
     def score(self, x, scaling=1.0, drift=0.0, added_noise_sq=0.0):
         x_cent = x - self.mean(scaling, drift)
@@ -300,6 +300,25 @@ class DynamicMixture(Mixture):
         ode = f_tx - 0.5 * g_sq_t * score_tx
         jac = jac_f_tx - 0.5 * g_sq_t * jac_score_tx
         return ode, jac
+
+    def sample(
+        self, size: tuple | int = (), t: float = 0.0, seed: SeedSequence | int = DEFAULT_SEED, **kwargs
+    ):
+        if isinstance(size, int):
+            size = (size,)
+        if isinstance(seed, int):
+            seed = SeedSequence(seed)
+        seeds = seed.spawn(self.num_rv + 1)
+
+        rng = default_rng(seeds[-1])
+        choice = rng.choice(self.num_rv, size=(*size, 1), p=self.weights)
+
+        x = np.zeros((*size, self.dim))
+        evol_t = self.evol_t(t)
+        for k, rvk in enumerate(self.rv):
+            # sample greedily and filter to keep only k-th distribution
+            x += (choice == k) * rvk.sample(size, seeds[k], **evol_t, **kwargs)
+        return x
 
 
 ###########################
