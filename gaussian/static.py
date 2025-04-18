@@ -154,7 +154,7 @@ class Mixture:
         tot_score = np.zeros_like(x)
         tot_prob = np.zeros((*x.shape[:-1], 1))
         for wk, rvk in zip(self.weights, self.rv):
-            probk = (wk * rvk.density(x, **kwargs))[..., None]
+            probk = wk * rvk.density(x, **kwargs)[..., None]
             tot_prob += probk
             tot_score += probk * rvk.score(x, **kwargs)
         return tot_score / tot_prob
@@ -165,7 +165,7 @@ class Mixture:
         tot_score = np.zeros_like(x)
         tot_norm_sq_score = np.zeros_like(tot_prob)
         tot_div_score = np.zeros_like(tot_prob)
-        
+
         for w_k, rv_k in zip(self.weights, self.rv):
             prob_k = w_k * rv_k.density(x, **kwargs)[..., None]
             tot_prob += prob_k
@@ -176,10 +176,12 @@ class Mixture:
             tot_norm_sq_score += prob_k * np.sum(np.square(score_k), -1, keepdims=True)
             tot_div_score += prob_k * div_score_k
 
-        score = tot_score / (1e-8 + tot_prob)
+        inv_prob = 1.0 / (1e-14 + tot_prob)  # avoid division by zero
+        score = tot_score * inv_prob
         norm_sq_tot_score = np.sum(np.square(score), axis=-1, keepdims=True)
-        div_score = (tot_norm_sq_score + tot_div_score) / (1e-8 + tot_prob) - norm_sq_tot_score
-        return score, div_score
+
+        div_score = (tot_norm_sq_score + tot_div_score) * inv_prob - norm_sq_tot_score
+        return score, div_score[..., 0]
 
     def score_with_jac(self, x, **kwargs):
         tot_prob = np.zeros((*x.shape[:-1], 1, 1))
@@ -196,12 +198,13 @@ class Mixture:
             score_k = score_k[..., :, None]
             tot_score += prob_k * score_k
 
-            tot_tensor_score += prob_k * score_k * np.moveaxis(score_k, -1, -2)
+            tot_tensor_score += prob_k * score_k * np.swapaxes(score_k, -1, -2)
             tot_jac_score += prob_k * jac_score_k
 
-        score = tot_score / (1e-8 + tot_prob)
-        tensor_tot_score = score * np.moveaxis(score, -1, -2)
-        jac_score = (tot_tensor_score + tot_jac_score) / (1e-8 + tot_prob) - tensor_tot_score
+        inv_prob = 1.0 / (1e-14 + tot_prob)
+        score = tot_score * inv_prob
+        tensor_tot_score = score * np.swapaxes(score, -1, -2)
+        jac_score = (tot_tensor_score + tot_jac_score) * inv_prob - tensor_tot_score
         return score[..., 0], jac_score
 
     def sample(
