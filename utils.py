@@ -59,7 +59,7 @@ def solve_flow(mix, prior, n_data=5000, t_min=1e-6, tf=1.0):
     def flat_extended_ode(t, x_cumdiv_flat):
         x, _ = np.split(x_cumdiv_flat.reshape(-1, mix.dim + 1), [mix.dim], -1)
         dx, dlogp = mix.extended_ode(t, x)
-        return np.concatenate([dx, dlogp], 1).flatten()
+        return np.concatenate([dx, dlogp[..., None]], 1).flatten()
 
     x_data = mix.sample(n_data)
     delta_logp = np.zeros((n_data, 1))
@@ -70,4 +70,4 @@ def solve_flow(mix, prior, n_data=5000, t_min=1e-6, tf=1.0):
     x_logp_fin = sol.y[:, -1].reshape(n_data, mix.dim + 1)
     x, delta_logp = np.split(x_logp_fin, [mix.dim], -1)
     prior_fin = np.log(prior.density(x))
-    return x, -(delta_logp[:, 0] + prior_fin).mean() / np.log(2.0) / mix.dim
+    return x, x_data, -(delta_logp[:, 0] + prior_fin).mean() / np.log(2.0) / mix.dim
