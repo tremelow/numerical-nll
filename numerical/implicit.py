@@ -8,17 +8,18 @@ class BroydenSolver:
     Implicit Euler method solver using Broyden method
     """
 
-    def __init__(self, mix, t_min, tf, nt, linear_ts=False):
+    def __init__(self, mix, t_min, tf, nt, linear_ts=False, benchmark=False):
         self.ode = mix.ode
         self.ode_with_jac = mix.ode_with_jac
         self.tf = tf
+        self.benchmark = benchmark
 
         if linear_ts:
-            self.t_eval = np.linspace(t_min, tf, nt + 1, dtype=np.float32)
+            self.t_eval = np.linspace(t_min, tf, nt, dtype=np.float32)
         else:
             rho = 7
-            step_indices = np.arange(nt, dtype=np.float32)
-            t_steps = (tf ** (1 / rho) + step_indices / (nt - 1) * (t_min ** (1 / rho) - tf ** (1 / rho))) ** rho
+            step_indices = np.linspace(0, 1, nt)
+            t_steps = (tf ** (1 / rho) + step_indices * (t_min ** (1 / rho) - tf ** (1 / rho))) ** rho
             self.t_eval = np.flip(t_steps)
 
     def get_res(self, x_cur, x_next, t_cur, t_next):
@@ -32,7 +33,10 @@ class BroydenSolver:
 
         res = self.get_res(x_cur, x_next, t_cur, t_next)
 
+        n_broyden_iter = 0
         while True:
+            n_broyden_iter += 1
+
             dx = -np.einsum('...ij,...j->...i', invJ, res) # [b, d]
             x_next = x_next + 0.9 * dx
 
@@ -51,11 +55,13 @@ class BroydenSolver:
 
             res = res_new
 
-        _, jac_next = self.ode_with_jac(t_next, x_next)
-    
-        log_det = -np.linalg.slogdet(eye - (t_next - t_cur) * jac_next)[1]
+        if self.benchmark:
+            log_det = None
+        else:
+            _, jac_next = self.ode_with_jac(t_next, x_next)
+            log_det = -np.linalg.slogdet(eye - (t_next - t_cur) * jac_next)[1]
 
-        return x_next, log_det
+        return x_next, log_det, n_broyden_iter
 
     def prior_logp_fn(self, z):
         shape = z.shape
@@ -66,24 +72,30 @@ class BroydenSolver:
         x_list = [x_cur]
         log_det_list = []
 
+        total_broyden_iter = 0
         for t_cur, t_next in zip(self.t_eval[:-1], self.t_eval[1:]):
             drift = self.ode(t_cur, x_cur)
             x_euler = x_cur + (t_next - t_cur) * drift
             drift_prime = self.ode(t_next, x_euler)
             x_heun = x_cur + (t_next - t_cur) * (0.5 * drift + 0.5 * drift_prime)
 
-            x_next, log_det = self.broyden_method(x_heun, x_cur, t_cur, t_next)
+            x_next, log_det, broyden_iter = self.broyden_method(x_heun, x_cur, t_cur, t_next)
 
             x_list.append(x_next)
             log_det_list.append(log_det)
-            x_cur = x_next
-        
-        x_final = x_next
-        prior_logp = self.prior_logp_fn(x_final)
-        nll_batch = -(np.sum(log_det_list, axis=0) + prior_logp)
-        nll_bpd = nll_batch / (np.log(2.) * x_final.shape[-1])
+            total_broyden_iter += broyden_iter
 
-        return self.t_eval, np.array(x_list).transpose(1, 0, 2), nll_bpd
+            x_cur = x_next
+
+        if self.benchmark:
+            print(f"Mean Broyden iterations: {total_broyden_iter / len(self.t_eval)}")
+        else:
+            x_final = x_next
+            prior_logp = self.prior_logp_fn(x_final)
+            nll_batch = -(np.sum(log_det_list, axis=0) + prior_logp)
+            nll_bpd = nll_batch / (np.log(2.) * x_final.shape[-1])
+
+            return self.t_eval, np.array(x_list).transpose(1, 0, 2), nll_bpd
 
 # class BroydenSolverSolveIVP(OdeSolver):
 #     """

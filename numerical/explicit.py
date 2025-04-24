@@ -13,11 +13,11 @@ class EulerSolver():
         self.tf = tf
 
         if linear_ts:
-            self.t_eval = np.linspace(t_min, tf, nt + 1, dtype=np.float32)
+            self.t_eval = np.linspace(t_min, tf, nt, dtype=np.float32)
         else:
             rho = 7
-            step_indices = np.arange(nt, dtype=np.float32)
-            t_steps = (tf ** (1 / rho) + step_indices / (nt - 1) * (t_min ** (1 / rho) - tf ** (1 / rho))) ** rho
+            step_indices = np.linspace(0, 1, nt)
+            t_steps = (tf ** (1 / rho) + step_indices * (t_min ** (1 / rho) - tf ** (1 / rho))) ** rho
             self.t_eval = np.flip(t_steps)
 
     def prior_logp_fn(self, z):
