@@ -15,7 +15,7 @@ class BroydenSolver:
         self.benchmark = benchmark
 
         if linear_ts:
-            self.t_eval = np.linspace(t_min, tf, nt, dtype=np.float32)
+            self.t_eval = np.linspace(t_min, tf, nt + 1, dtype=np.float32)
         else:
             rho = 7
             step_indices = np.linspace(0, 1, nt)
