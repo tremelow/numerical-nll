@@ -23,27 +23,19 @@ Before running the experiments, you need to install the required libraries. We r
 
 ## Toy model experiments
 
-List of experiments provided (in alphabetical order):
-- `broyden_benchmark.ipynb`: Benchmark of average Broyden iterations required for each time-step per total steps and per dimension.
-- `timesteps_comparison.ipynb`: Comparison between linear and [EDM](https://arxiv.org/abs/2206.00364) time-steps scheduling, with mean squared error (MSE) and plots between the computed and quasi-exact NLL for various total steps.
+List of main experiments provided:
 - `viz_numerical_cube.ipynb`: Plots and NLL computation on uniform Gaussian mixtures in varying dimension, with components centered at
 each vertex of an hypercube. Also contains Explicit Euler method issue illustration.
+- `broyden_benchmark.ipynb`: Benchmark of average Broyden iterations required for each time-step per total steps and per dimension.
+- `timesteps_comparison.ipynb`: Comparison between linear and [EDM](https://arxiv.org/abs/2206.00364) time-steps scheduling, with mean squared error (MSE) and plots between the computed and quasi-exact NLL for various total steps.
 
-Temp:
-- `naive_time_evol.ipynb`
-- `nll_cube.ipynb`
-- `viz_cube.ipynb`
-- `viz_dynamic.ipynb`
-- `viz_mixture.ipynb`
-- `viz_numerical_hexa.ipynb`
-- `viz_ode.ipynb`
-- `viz_single.ipynb`
+If you wish, you can also explore the other notebooks (`naive_time_evol.ipynb`, `nll_cube.ipynb`, `viz_cube.ipynb`, `viz_dynamic.ipynb`, `viz_mixture.ipynb`, `viz_numerical_hexa.ipynb`, `viz_ode.ipynb`, `viz_single.ipynb`), which mainly contain tests carried out to validate the implementation of the toy model, as well as some additional experiments.
 
 ## Fashion-MNIST experiments
 
 ### Data and trained model
 
-We provide the dataset, as well as the trained model: [Google Drive link](https://drive.google.com/drive/folders/1GKwCEf9rwETgW80E78kggmw-6cd0Dypk?usp=sharing)
+We provide the pre-processed dataset, as well as the trained model: [Google Drive link](https://drive.google.com/drive/folders/1GKwCEf9rwETgW80E78kggmw-6cd0Dypk?usp=sharing)
 
 The model has been trained using the [EDM repo](https://github.com/NVlabs/edm). The dataset has been pre-processed as indicated in their [README](https://github.com/NVlabs/edm?tab=readme-ov-file#preparing-datasets). We then ran their `train.py` script with `-cond=0 -arch=ddpmpp` hyperparameters.
 
