@@ -86,7 +86,6 @@ def get_likelihood_fn(model, sde, hutchinson_type='Rademacher',
                 raise NotImplementedError(f"Hutchinson type {hutchinson_type} unknown.")
 
             def ode_func(t, x):
-                # print(t)
                 sample = from_flattened_numpy(x[:-shape[0]], shape).to(data.device).type(torch.float32)
                 vec_t = torch.ones(sample.shape[0], device=sample.device) * t
                 drift = to_flattened_numpy(drift_fn(sample, vec_t))
